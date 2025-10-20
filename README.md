@@ -9,8 +9,9 @@ This repository documents step-by-step procedures for:
 🧩 Render to HTML:
 ```bash
 asciidoctor docs/crypto_guide.adoc
+```
 
 ## License
 
 © 2025 Abhishek Ojha
-This work is licensed under the MIT License. See [LICENSE](./LICENSE) for details.
+This work is licensed under the MIT License. See [LICENSE](LICENSE) for details.
