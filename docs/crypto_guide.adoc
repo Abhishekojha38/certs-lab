@@ -13,6 +13,7 @@ Brief overview of what this guide covers:
 * X.509 certificates (self-signed & CA-signed)
 
 == Environment Setup
+
 List prerequisites:
 * OpenSSL ≥ 3.0
 * bash
@@ -24,7 +25,117 @@ Example setup:
 sudo apt install openssl asciidoctor
 ----
 
-== Key generation
+== Encoding Formats
+
+* PEM: ASCII Base64 encoding format. PEM certificates can have a file extension
+of .pem, .crt, or .cer.The PEM format is the most common format that Certificate
+Authorities issue certificates in. PEM certificates usually have extentions such
+as .pem, .crt, .cer, and .key. They are Base64 encoded ASCII files and contain
+"-----BEGIN CERTIFICATE-----" and "-----END CERTIFICATE-----" statements. Server
+certificates, intermediate certificates, and private keys can all be put into
+the PEM format. The PKCS12 format is preferred for exchanging certificates that
+has private key(s).
+----
+-----BEGIN CERTIFICATE-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...
+-----END CERTIFICATE-----
+----
+
+* DER: The DER format is simply a binary form of a certificate instead of the
+ASCII PEM format. It sometimes has a file extension of .der but it often has a
+file extension of .cer so the only way to tell the difference between a DER .cer
+file and a PEM .cer file is to open it in a text editor and look for the
+BEGIN/END statements. All types of certificates and private keys can be encoded
+in DER format.
+
+* PKCS#5: Password-Based Encryption Standard. Protecting private keys with
+passwords. Replaced by PKCS#12 (which is more general) and PKCS#8 for key
+storage.
+
+* PKCS#8: Standard syntax for storing private keys.Can be encrypted or
+unencrypted. 
+----
+Unencrypted:
+-----BEGIN PRIVATE KEY-----
+...
+-----END PRIVATE KEY-----
+
+Encrypted:
+-----BEGIN ENCRYPTED PRIVATE KEY-----
+...
+-----END ENCRYPTED PRIVATE KEY-----
+----
+
+[NOTE]
+--
+PKCS #8 is a private key syntax for all algorithms and not just RSA. On the
+other hand, PKCS1 is primarily for using the RSA algorithm.
+--
+
+* PKCS#10: Certificate Signing Request (CSR) format.
+----
+-----BEGIN CERTIFICATE REQUEST-----
+...
+-----END CERTIFICATE REQUEST-----
+----
+
+* PKCS#12: Container format for storing private key + certificate chain.
+----
+openssl pkcs12 -export -out bundle.p12 -inkey private.key -in cert.crt -certfile ca.crt
+----
+
+* PKCS#7: Format for signed or encrypted data (e.g., certificate chain or CMS).
+Used for bundling multiple certificates (like intermediate + root).
+
+[cols="1,2,2,2,1", options="header"]
+|===
+| Format / Standard | Purpose | Contains | Common Extension | Encoding
+
+| PEM
+| General container
+| Certs / Keys
+| .pem, .crt, .key
+| Base64
+
+| DER
+| Binary form
+| Certs / Keys
+| .der, .cer
+| Binary
+
+| PKCS#5
+| Password-based key derivation
+| —
+| —
+| —
+
+| PKCS#8
+| Private key format
+| Private key
+| .p8, .key
+| PEM/DER
+
+| PKCS#10
+| Certificate Signing Request
+| CSR info + signature
+| .csr
+| PEM/DER
+
+| PKCS#12
+| Key + certificate chain container
+| Private key + certs
+| .p12, .pfx
+| Binary
+
+| PKCS#7 (CMS)
+| Signed/encrypted message or cert chain. *Uses private key for signing but does not contain it.*
+| Certs, signatures, encrypted data
+| .p7b, .p7c
+| Binary/PEM
+|===
+
+
+== Key Generation
 
 * Generate Private key:
 ----
@@ -365,3 +476,8 @@ $ openssl x509 -in device.crt -text -noout
 $ openssl verify -CAfile rootCA.crt device.crt
 device.crt: OK
 ----
+
+== Refrences
+* https://cryptography.io/en/latest/hazmat/primitives/asymmetric/rsa/
+* https://www.digitalocean.com/community/tutorials/openssl-essentials-working-with-ssl-certificates-private-keys-and-csrs
+* https://www.cem.me/20150104-cert-binaries-2.html
