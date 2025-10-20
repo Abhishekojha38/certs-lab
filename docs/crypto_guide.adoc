@@ -27,7 +27,7 @@ sudo apt install openssl asciidoctor
 
 == Encoding Formats
 
-* PEM: ASCII Base64 encoding format. PEM certificates can have a file extension
+* `PEM`: ASCII Base64 encoding format. PEM certificates can have a file extension
 of .pem, .crt, or .cer.The PEM format is the most common format that Certificate
 Authorities issue certificates in. PEM certificates usually have extentions such
 as .pem, .crt, .cer, and .key. They are Base64 encoded ASCII files and contain
@@ -35,25 +35,27 @@ as .pem, .crt, .cer, and .key. They are Base64 encoded ASCII files and contain
 certificates, intermediate certificates, and private keys can all be put into
 the PEM format. The PKCS12 format is preferred for exchanging certificates that
 has private key(s).
+
 ----
 -----BEGIN CERTIFICATE-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...
 -----END CERTIFICATE-----
 ----
 
-* DER: The DER format is simply a binary form of a certificate instead of the
+* `DER`: The DER format is simply a binary form of a certificate instead of the
 ASCII PEM format. It sometimes has a file extension of .der but it often has a
 file extension of .cer so the only way to tell the difference between a DER .cer
 file and a PEM .cer file is to open it in a text editor and look for the
 BEGIN/END statements. All types of certificates and private keys can be encoded
 in DER format.
 
-* PKCS#5: Password-Based Encryption Standard. Protecting private keys with
-passwords. Replaced by PKCS#12 (which is more general) and PKCS#8 for key
-storage.
+* `PKCS#5`: Password-Based Encryption Standard. Protecting private keys with
+passwords. Replaced by `PKCS#12` (which is more general) and `PKCS#8` for key
+storage. http://tools.ietf.org/html/rfc2898[RFC2898]
 
-* PKCS#8: Standard syntax for storing private keys.Can be encrypted or
+* `PKCS#8`: Standard syntax for storing private keys. It Can be encrypted or
 unencrypted. 
+
 ----
 Unencrypted:
 -----BEGIN PRIVATE KEY-----
@@ -68,23 +70,80 @@ Encrypted:
 
 [NOTE]
 --
-PKCS #8 is a private key syntax for all algorithms and not just RSA. On the
-other hand, PKCS1 is primarily for using the RSA algorithm.
+PKCS#8 is a private key syntax for all algorithms and not just RSA. On the
+other hand, PKCS#1 is primarily for using the RSA algorithm.
 --
 
-* PKCS#10: Certificate Signing Request (CSR) format.
+* `PKCS#10`: Certificate Signing Request (CSR) format. Refer to the
+<<generate-csr,generate csr>> section.
+
 ----
 -----BEGIN CERTIFICATE REQUEST-----
 ...
 -----END CERTIFICATE REQUEST-----
 ----
 
-* PKCS#12: Container format for storing private key + certificate chain.
+* `PKCS#11`: defines a platform-independent API known as `Cryptoki`
+(“Cryptographic Token Interface”).It allows applications to interact with
+cryptographic tokens — such as Hardware Security Modules (HSMs), smart cards,
+or TPMs, OP-TEE. 
+
+** List available slots.
+
+----
+$ pkcs11-tool --module /usr/lib/libckteec.so -L
+Available slots:
+Slot 0 (0x0): OP-TEE PKCS#11 Token (User)
+  token label        : OP-TEE Token
+  token manufacturer : Linaro
+  token model        : OP-TEE
+  serial num         : 0000000000000000
+  flags              : login required, rng, token initialized
+
+----
+
+** Initialize token (first time only) and pin.
+
+----
+$ pkcs11-tool --module /usr/lib/libckteec.so --init-token --label "TEE-Token"
+$ pkcs11-tool --module /usr/lib/libckteec.so --init-pin --pin 1234
+----
+
+** Generate RSA key pair inside secure enclave.
+
+----
+$ pkcs11-tool --module /usr/lib/libckteec.so \
+  --login --pin 1234 \
+  --keypairgen --key-type RSA:2048 --id 01 --label "TEE-RSA-Key"
+---- 
+
+** After generating the key list the URI.
+
+----
+$ pkcs11-tool --module /usr/lib/libckteec.so --list-objects --login --pin 1234 \
+--type privkey --output-format pkcs11
+pkcs11:token=TEE-Token;object=TEE-RSA-Key;id=%01;type=private
+----
+
+** Now you can use it directly with openssl.
+
+----
+openssl pkeyutl -sign \
+  -engine pkcs11 \
+  -keyform engine \
+  -inkey 'pkcs11:token=TEE-Token;id=%01;type=private' \
+  -in data.txt -out sig.bin
+----
+
+* `PKCS#12`: Container format for storing private key + certificate chain. It is
+used to bundle a private key with its X.509 or to bundle all the members of a
+chain of trust.
+
 ----
 openssl pkcs12 -export -out bundle.p12 -inkey private.key -in cert.crt -certfile ca.crt
 ----
 
-* PKCS#7: Format for signed or encrypted data (e.g., certificate chain or CMS).
+* `PKCS#7`: Format for signed or encrypted data (e.g., certificate chain or CMS).
 Used for bundling multiple certificates (like intermediate + root).
 
 [cols="1,2,2,2,1", options="header"]
@@ -186,17 +245,20 @@ Data ──> Hash ──> Encrypt with Private Key ──> Digital Signature
 
 ==== Example
 
-* Sample data
+* Sample data.
+
 ----
 echo "Confidential data to sign" > data.txt
 ----
 
 * Sign the data and generate digital signature.
+
 ----
 openssl dgst -sha256 -sign private_key.pem -out signature.bin data.txt
 ----
 
-* Verify signature
+* Verify signature.
+
 ----
 openssl dgst -sha256 -verify public_key.pem -signature signature.bin data.txt
 ----
@@ -235,6 +297,7 @@ Generate self-signed x509 certificate.
 * Creates a new certificate request internally.
 * Immediately self-signs it using the same private key.
 * Outputs the certificate (X.509 format), not the CSR.
+
 ----
 $ openssl req -x509 -new -nodes -key private_key.pem -sha256 -days 3650 -out device.crt
 You are about to be asked to enter information that will be incorporated
@@ -243,7 +306,6 @@ What you are about to enter is what is called a Distinguished Name or a DN.
 There are quite a few fields but you can leave some blank
 For some fields there will be a default value,
 If you enter '.', the field will be left blank.
------
 Country Name (2 letter code) [AU]:CA
 State or Province Name (full name) [Some-State]:Quebec
 Locality Name (eg, city) []:
@@ -253,6 +315,7 @@ Common Name (e.g. server FQDN or YOUR name) []:device.company.solutions
 Email Address []:
 ----
 
+[[generate-csr]]
 ==== Option 2: Generate csr and then sign it with same private key.
 
 * You explicitly create a Certificate Signing Request (CSR).
@@ -263,6 +326,7 @@ steps.
 * Generate CSR, Hash of (Public Key + Identity Info) = Sign the Hash with
 Private key which result in Digital signature. Append digital signature at the
 end of CSR.
+
 ----
 $ openssl req -new -key private_key.pem -out request.csr
 You are about to be asked to enter information that will be incorporated
@@ -271,7 +335,6 @@ What you are about to enter is what is called a Distinguished Name or a DN.
 There are quite a few fields but you can leave some blank
 For some fields there will be a default value,
 If you enter '.', the field will be left blank.
------
 Country Name (2 letter code) [AU]:CA
 State or Province Name (full name) [Some-State]:Quebec
 Locality Name (eg, city) []:
@@ -286,13 +349,13 @@ A challenge password []:
 An optional company name []:
 ----
 
-* Generate X509 cert
+* Generate X509 cert.
+
 ----
 openssl x509 -req -in request.csr -signkey private_key.pem -out cert.pem -days 365
 Certificate request self-signature ok
 subject=C=CA, ST=Quebec, O=Company Solutions, CN=device.company.solutions
 ----
-
 
 === Generate X509 Root CA
 
@@ -301,12 +364,14 @@ subject=C=CA, ST=Quebec, O=Company Solutions, CN=device.company.solutions
 A Root CA is the top of the trust chain — it signs other certificates to make
 them trusted.
 
-* Generate Root CA Private Key
+* Generate Root CA Private Key.
+
 ----
 openssl genpkey -algorithm RSA -out root-pri.key -pkeyopt rsa_keygen_bits:4096
 ----
 
-* Create Root CA Certificate
+* Create Root CA Certificate.
+
 ----
 $ openssl req -x509 -new -nodes -key root-pri.key -sha256 -days 3650 -out rootCA.crt
 You are about to be asked to enter information that will be incorporated
@@ -336,6 +401,7 @@ Email Address []:
 (Data ──> Hash ──> Encrypt with Private Key ──> Digital Signature). Here
 Encrypt with Private Key(Hash(data(Identitiy + PublicKey))) is
 sha256WithRSAEncryption(data(Identitiy + PublicKey))
+
 ----
 openssl x509 -in rootCA.crt -text -noout
 Certificate:
@@ -380,6 +446,7 @@ Now we’ll create another certificate (for a device, web server, or user) that�
 signed by the Root CA.
 
 * Generate Device Private Key.
+
 ----
 openssl genpkey -algorithm RSA -out device.key -pkeyopt rsa_keygen_bits:2048
 ----
@@ -387,6 +454,7 @@ openssl genpkey -algorithm RSA -out device.key -pkeyopt rsa_keygen_bits:2048
 * Generate CSR (Certificate Signing Request)
 Hash of (Public Key + Identity Info) = Sign the Hash with Private key which
 result in Digital signature. Append digital signature at the end of CSR.
+
 ----
 $ openssl req -new -key device.key -out device.csr
 You are about to be asked to enter information that will be incorporated
@@ -395,7 +463,6 @@ What you are about to enter is what is called a Distinguished Name or a DN.
 There are quite a few fields but you can leave some blank
 For some fields there will be a default value,
 If you enter '.', the field will be left blank.
------
 Country Name (2 letter code) [AU]:
 State or Province Name (full name) [Some-State]:
 Locality Name (eg, city) []:
@@ -411,6 +478,7 @@ An optional company name []:
 ----
 
 Enter details:
+
 ----
 Country Name (2 letter code) [AU]:CA
 State or Province Name (full name) [Some-State]:Quebec
@@ -419,6 +487,7 @@ Common Name [localhost]:device.company.local
 ----
 
 * Dump csr for understanding.
+
 ----
 openssl req -in device.csr -text -noout
 Certificate Request:
@@ -446,7 +515,8 @@ Certificate Request:
         46:95:0b:ec
 ----
 
-* Create Configuration File for Extensions (Optional but Recommended)
+* Create Configuration File for Extensions (Optional but Recommended).
+
 ----
 authorityKeyIdentifier=keyid,issuer
 basicConstraints=CA:FALSE
@@ -458,7 +528,8 @@ subjectAltName = @alt_names
 DNS.1 = device.company.local
 ----
 
-* Sign the Device CSR with Root CA
+* Sign the Device CSR with Root CA.
+
 ----
 $ openssl x509 -req -in device.csr -CA rootCA.crt -CAkey root-pri.key -CAcreateserial \
 -out device.crt -days 730 -sha256 -extfile device_ext.cnf
@@ -466,18 +537,21 @@ Certificate request self-signature ok
 subject=C = CA, ST = Quebec, O = Company Solutions, CN = device.company.local
 ----
 
-* Verify the Signed Certificate
+* Verify the Signed Certificate.
+
 ----
 $ openssl x509 -in device.crt -text -noout
 ----
 
-* Verify the Certificate Chain
+* Verify the Certificate Chain.
+
 ----
 $ openssl verify -CAfile rootCA.crt device.crt
 device.crt: OK
 ----
 
 == Refrences
+* https://datatracker.ietf.org/doc/html/rfc2898
 * https://cryptography.io/en/latest/hazmat/primitives/asymmetric/rsa/
 * https://www.digitalocean.com/community/tutorials/openssl-essentials-working-with-ssl-certificates-private-keys-and-csrs
 * https://www.cem.me/20150104-cert-binaries-2.html
