@@ -90,8 +90,12 @@ or TPMs, OP-TEE.
 
 ** List available slots.
 
+[source,bash]
 ----
-$ pkcs11-tool --module /usr/lib/libckteec.so -L
+pkcs11-tool --module /usr/lib/libckteec.so -L
+----
+
+----
 Available slots:
 Slot 0 (0x0): OP-TEE PKCS#11 Token (User)
   token label        : OP-TEE Token
@@ -104,29 +108,36 @@ Slot 0 (0x0): OP-TEE PKCS#11 Token (User)
 
 ** Initialize token (first time only) and pin.
 
+[source,bash]
 ----
-$ pkcs11-tool --module /usr/lib/libckteec.so --init-token --label "TEE-Token"
-$ pkcs11-tool --module /usr/lib/libckteec.so --init-pin --pin 1234
+pkcs11-tool --module /usr/lib/libckteec.so --init-token --label "TEE-Token"
+pkcs11-tool --module /usr/lib/libckteec.so --init-pin --pin 1234
 ----
 
 ** Generate RSA key pair inside secure enclave.
 
+[source,bash]
 ----
-$ pkcs11-tool --module /usr/lib/libckteec.so \
+pkcs11-tool --module /usr/lib/libckteec.so \
   --login --pin 1234 \
   --keypairgen --key-type RSA:2048 --id 01 --label "TEE-RSA-Key"
 ---- 
 
 ** After generating the key list the URI.
 
+[source,bash]
 ----
-$ pkcs11-tool --module /usr/lib/libckteec.so --list-objects --login --pin 1234 \
+pkcs11-tool --module /usr/lib/libckteec.so --list-objects --login --pin 1234 \
 --type privkey --output-format pkcs11
+----
+
+----
 pkcs11:token=TEE-Token;object=TEE-RSA-Key;id=%01;type=private
 ----
 
 ** Now you can use it directly with openssl.
 
+[source,bash]
 ----
 openssl pkeyutl -sign \
   -engine pkcs11 \
@@ -139,6 +150,7 @@ openssl pkeyutl -sign \
 used to bundle a private key with its X.509 or to bundle all the members of a
 chain of trust.
 
+[source,bash]
 ----
 openssl pkcs12 -export -out bundle.p12 -inkey private.key -in cert.crt -certfile ca.crt
 ----
@@ -197,9 +209,14 @@ Used for bundling multiple certificates (like intermediate + root).
 == Key Generation
 
 * Generate Private key:
+
+[source,bash]
 ----
-$ openssl genpkey -algorithm RSA -out private_key.pem -pkeyopt rsa_keygen_bits:2048
-$ cat private_key.pem 
+openssl genpkey -algorithm RSA -out private_key.pem -pkeyopt rsa_keygen_bits:2048
+cat private_key.pem 
+----
+
+----
 -----BEGIN PRIVATE KEY-----
 MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCkUrjpLeCnuXXE
 ........
@@ -209,9 +226,14 @@ mMzOBHNsW8pIxInMBcUp3NM=
 ----
 
 * Extract Public Key:
+
+[source,bash]
 ----
-$ openssl rsa -pubout -in private_key.pem -out public_key.pem
-$ cat public_key.pem 
+openssl rsa -pubout -in private_key.pem -out public_key.pem
+cat public_key.pem
+----
+
+----
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApFK46S3gp7l1xJ7dzWnu
 ........
@@ -247,18 +269,21 @@ Data ──> Hash ──> Encrypt with Private Key ──> Digital Signature
 
 * Sample data.
 
+[source,bash]
 ----
 echo "Confidential data to sign" > data.txt
 ----
 
 * Sign the data and generate digital signature.
 
+[source,bash]
 ----
 openssl dgst -sha256 -sign private_key.pem -out signature.bin data.txt
 ----
 
 * Verify signature.
 
+[source,bash]
 ----
 openssl dgst -sha256 -verify public_key.pem -signature signature.bin data.txt
 ----
@@ -281,6 +306,8 @@ key (used when no CA is involved).
 === Generate self-signed X509
 
 * Generate Private key
+
+[source,bash]
 ----
 openssl genpkey -algorithm RSA -out private_key.pem -pkeyopt rsa_keygen_bits:2048
 ----
@@ -298,8 +325,12 @@ Generate self-signed x509 certificate.
 * Immediately self-signs it using the same private key.
 * Outputs the certificate (X.509 format), not the CSR.
 
+[source,bash]
 ----
 $ openssl req -x509 -new -nodes -key private_key.pem -sha256 -days 3650 -out device.crt
+----
+
+----
 You are about to be asked to enter information that will be incorporated
 into your certificate request.
 What you are about to enter is what is called a Distinguished Name or a DN.
@@ -327,8 +358,12 @@ steps.
 Private key which result in Digital signature. Append digital signature at the
 end of CSR.
 
+[source,bash]
 ----
 $ openssl req -new -key private_key.pem -out request.csr
+----
+
+----
 You are about to be asked to enter information that will be incorporated
 into your certificate request.
 What you are about to enter is what is called a Distinguished Name or a DN.
@@ -351,8 +386,12 @@ An optional company name []:
 
 * Generate X509 cert.
 
+[source,bash]
 ----
 openssl x509 -req -in request.csr -signkey private_key.pem -out cert.pem -days 365
+----
+
+----
 Certificate request self-signature ok
 subject=C=CA, ST=Quebec, O=Company Solutions, CN=device.company.solutions
 ----
@@ -366,21 +405,25 @@ them trusted.
 
 * Generate Root CA Private Key.
 
+[source,bash]
 ----
 openssl genpkey -algorithm RSA -out root-pri.key -pkeyopt rsa_keygen_bits:4096
 ----
 
 * Create Root CA Certificate.
 
+[source,bash]
 ----
 $ openssl req -x509 -new -nodes -key root-pri.key -sha256 -days 3650 -out rootCA.crt
+----
+
+----
 You are about to be asked to enter information that will be incorporated
 into your certificate request.
 What you are about to enter is what is called a Distinguished Name or a DN.
 There are quite a few fields but you can leave some blank
 For some fields there will be a default value,
 If you enter '.', the field will be left blank.
------
 Country Name (2 letter code) [AU]:CA
 State or Province Name (full name) [Some-State]:Quebec
 Locality Name (eg, city) []:
@@ -402,8 +445,12 @@ Email Address []:
 Encrypt with Private Key(Hash(data(Identitiy + PublicKey))) is
 sha256WithRSAEncryption(data(Identitiy + PublicKey))
 
+[source,bash]
 ----
 openssl x509 -in rootCA.crt -text -noout
+----
+
+----
 Certificate:
     Data:
         Version: 3 (0x2)
@@ -447,6 +494,7 @@ signed by the Root CA.
 
 * Generate Device Private Key.
 
+[source,bash]
 ----
 openssl genpkey -algorithm RSA -out device.key -pkeyopt rsa_keygen_bits:2048
 ----
@@ -455,8 +503,12 @@ openssl genpkey -algorithm RSA -out device.key -pkeyopt rsa_keygen_bits:2048
 Hash of (Public Key + Identity Info) = Sign the Hash with Private key which
 result in Digital signature. Append digital signature at the end of CSR.
 
+[source,bash]
 ----
 $ openssl req -new -key device.key -out device.csr
+----
+
+----
 You are about to be asked to enter information that will be incorporated
 into your certificate request.
 What you are about to enter is what is called a Distinguished Name or a DN.
@@ -488,8 +540,12 @@ Common Name [localhost]:device.company.local
 
 * Dump csr for understanding.
 
+[source,bash]
 ----
 openssl req -in device.csr -text -noout
+----
+
+----
 Certificate Request:
     Data:
         Version: 1 (0x0)
@@ -530,21 +586,27 @@ DNS.1 = device.company.local
 
 * Sign the Device CSR with Root CA.
 
+[source,bash]
 ----
-$ openssl x509 -req -in device.csr -CA rootCA.crt -CAkey root-pri.key -CAcreateserial \
+openssl x509 -req -in device.csr -CA rootCA.crt -CAkey root-pri.key -CAcreateserial \
 -out device.crt -days 730 -sha256 -extfile device_ext.cnf
+----
+
+----
 Certificate request self-signature ok
 subject=C = CA, ST = Quebec, O = Company Solutions, CN = device.company.local
 ----
 
 * Verify the Signed Certificate.
 
+[source,bash]
 ----
-$ openssl x509 -in device.crt -text -noout
+openssl x509 -in device.crt -text -noout
 ----
 
 * Verify the Certificate Chain.
 
+[source,bash]
 ----
 $ openssl verify -CAfile rootCA.crt device.crt
 device.crt: OK
@@ -578,14 +640,18 @@ Serial Number: 123456
 An `object` is a data item stored on a token.
 🧠 Think of an object as the “file” or “record” stored inside the token.
 
-----
 There are different types of objects:
 Data objects → arbitrary user data
 Key objects → private, public, or secret keys
 Certificate objects → X.509 certs
 
-$ pkcs11-tool --list-slots --module /usr/lib/libckteec.so.0 --login \
+[source,bash]
+----
+pkcs11-tool --list-slots --module /usr/lib/libckteec.so.0 --login \
 --pin 12345678 --list-objects
+----
+
+----
 Available slots:
 Slot 0 (0x0): OP-TEE PKCS11 TA - TEE UUID 55630e1a-0f9a-58e6-bf33-4cecc7d0b897
   token label        : optee
@@ -624,8 +690,12 @@ The `PKCS#11` token is implemented as an `OP-TEE` Trusted Application (TA):
 
 * After Initialization slot will look like this.
 
+[source,bash]
 ----
-root@ShopCamera:~# pkcs11-tool --module /usr/lib/libckteec.so.0  -L
+pkcs11-tool --module /usr/lib/libckteec.so.0  -L
+----
+
+----
 Available slots:
 Slot 0 (0x0): OP-TEE PKCS11 TA - TEE UUID 55630e1a-0f9a-58e6-bf33-4cecc7d0b897
   token label        : optee
