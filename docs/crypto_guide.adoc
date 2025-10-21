@@ -8,6 +8,7 @@ Abhishek Ojha <Abhishekojha38@gmail.com.com>
 == Introduction
 
 Brief overview of what this guide covers:
+
 * Key generation (RSA)
 * Understand digital signature
 * X.509 certificates (self-signed & CA-signed)
@@ -15,8 +16,8 @@ Brief overview of what this guide covers:
 == Environment Setup
 
 List prerequisites:
+
 * OpenSSL ≥ 3.0
-* bash
 * asciidoctor for rendering
 
 Example setup:
@@ -130,7 +131,6 @@ pkcs11-tool --module /usr/lib/libckteec.so \
 pkcs11-tool --module /usr/lib/libckteec.so --list-objects --login --pin 1234 \
 --type privkey --output-format pkcs11
 ----
-
 ----
 pkcs11:token=TEE-Token;object=TEE-RSA-Key;id=%01;type=private
 ----
@@ -329,7 +329,6 @@ Generate self-signed x509 certificate.
 ----
 $ openssl req -x509 -new -nodes -key private_key.pem -sha256 -days 3650 -out device.crt
 ----
-
 ----
 You are about to be asked to enter information that will be incorporated
 into your certificate request.
@@ -362,7 +361,6 @@ end of CSR.
 ----
 $ openssl req -new -key private_key.pem -out request.csr
 ----
-
 ----
 You are about to be asked to enter information that will be incorporated
 into your certificate request.
@@ -390,7 +388,6 @@ An optional company name []:
 ----
 openssl x509 -req -in request.csr -signkey private_key.pem -out cert.pem -days 365
 ----
-
 ----
 Certificate request self-signature ok
 subject=C=CA, ST=Quebec, O=Company Solutions, CN=device.company.solutions
@@ -416,7 +413,6 @@ openssl genpkey -algorithm RSA -out root-pri.key -pkeyopt rsa_keygen_bits:4096
 ----
 $ openssl req -x509 -new -nodes -key root-pri.key -sha256 -days 3650 -out rootCA.crt
 ----
-
 ----
 You are about to be asked to enter information that will be incorporated
 into your certificate request.
@@ -449,7 +445,6 @@ sha256WithRSAEncryption(data(Identitiy + PublicKey))
 ----
 openssl x509 -in rootCA.crt -text -noout
 ----
-
 ----
 Certificate:
     Data:
@@ -507,7 +502,6 @@ result in Digital signature. Append digital signature at the end of CSR.
 ----
 $ openssl req -new -key device.key -out device.csr
 ----
-
 ----
 You are about to be asked to enter information that will be incorporated
 into your certificate request.
@@ -544,7 +538,6 @@ Common Name [localhost]:device.company.local
 ----
 openssl req -in device.csr -text -noout
 ----
-
 ----
 Certificate Request:
     Data:
@@ -591,7 +584,6 @@ DNS.1 = device.company.local
 openssl x509 -req -in device.csr -CA rootCA.crt -CAkey root-pri.key -CAcreateserial \
 -out device.crt -days 730 -sha256 -extfile device_ext.cnf
 ----
-
 ----
 Certificate request self-signature ok
 subject=C = CA, ST = Quebec, O = Company Solutions, CN = device.company.local
@@ -609,6 +601,8 @@ openssl x509 -in device.crt -text -noout
 [source,bash]
 ----
 $ openssl verify -CAfile rootCA.crt device.crt
+----
+----
 device.crt: OK
 ----
 
@@ -641,16 +635,16 @@ An `object` is a data item stored on a token.
 🧠 Think of an object as the “file” or “record” stored inside the token.
 
 There are different types of objects:
-Data objects → arbitrary user data
-Key objects → private, public, or secret keys
-Certificate objects → X.509 certs
+
+* Data objects → arbitrary user data
+* Key objects → private, public, or secret keys
+* Certificate objects → X.509 certs
 
 [source,bash]
 ----
 pkcs11-tool --list-slots --module /usr/lib/libckteec.so.0 --login \
 --pin 12345678 --list-objects
 ----
-
 ----
 Available slots:
 Slot 0 (0x0): OP-TEE PKCS11 TA - TEE UUID 55630e1a-0f9a-58e6-bf33-4cecc7d0b897
@@ -694,7 +688,6 @@ The `PKCS#11` token is implemented as an `OP-TEE` Trusted Application (TA):
 ----
 pkcs11-tool --module /usr/lib/libckteec.so.0  -L
 ----
-
 ----
 Available slots:
 Slot 0 (0x0): OP-TEE PKCS11 TA - TEE UUID 55630e1a-0f9a-58e6-bf33-4cecc7d0b897
