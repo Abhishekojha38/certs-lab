@@ -220,7 +220,7 @@ rQIDAQAB
 -----END PUBLIC KEY-----
 ----
 
-== Understand digital signature
+== Understanding digital signature
 
 A digital signature is a cryptographic method that ensures:
 
@@ -263,7 +263,7 @@ openssl dgst -sha256 -sign private_key.pem -out signature.bin data.txt
 openssl dgst -sha256 -verify public_key.pem -signature signature.bin data.txt
 ----
 
-== 5. Understand X509 Certificate
+== 5. Understanding X509 Certificate
 
 An X.509 certificate is a digital document that binds a public key to an
 identity (like a user, computer, or server) and is used to verify authenticity
@@ -550,8 +550,101 @@ $ openssl verify -CAfile rootCA.crt device.crt
 device.crt: OK
 ----
 
+== Understanding PKCS#11
+
+PKCS#11 Module is a Module that has an API for accessing Crypto Hardware such
+as HSM (Hardware Security Module), Smart Card, and Crypto Tokens
+(e.g., USB Token), and it is an S/W Library provided by H/W Vendor. It is also
+called Cryptoki Module, and Cryptoki is a character made by shortening the
+Cryptographic Token Interface.
+
+A `slot` represents a connection point where a token can be present.
+🧠 Think of a slot as the “reader.”
+
+----
+Slot 0 — Smart card reader
+Slot 1 — Software token (SoftHSM)
+----
+
+A `token` is the actual cryptographic module inserted into a slot.
+🧠 Think of the token as the “smart card” or “HSM chip” that does crypto operations.
+
+----
+Token Label: “SecureKeyStore”
+Manufacturer: “Osmosis Security HSM”
+Serial Number: 123456
+----
+
+An `object` is a data item stored on a token.
+🧠 Think of an object as the “file” or “record” stored inside the token.
+
+----
+There are different types of objects:
+Data objects → arbitrary user data
+Key objects → private, public, or secret keys
+Certificate objects → X.509 certs
+
+$ pkcs11-tool --list-slots --module /usr/lib/libckteec.so.0 --login \
+--pin 12345678 --list-objects
+Available slots:
+Slot 0 (0x0): OP-TEE PKCS11 TA - TEE UUID 55630e1a-0f9a-58e6-bf33-4cecc7d0b897
+  token label        : optee
+  token manufacturer : Linaro
+  token model        : OP-TEE TA
+  token flags        : login required, rng, SO PIN count low, token initialized, PIN initialized
+  hardware version   : 0.0
+  firmware version   : 0.1
+  serial num         : 0000000000000000
+  pin min/max        : 4/128
+Slot 1 (0x1): OP-TEE PKCS11 TA - TEE UUID 55630e1a-0f9a-58e6-bf33-4cecc7d0b897
+  token state:   uninitialized
+Slot 2 (0x2): OP-TEE PKCS11 TA - TEE UUID 55630e1a-0f9a-58e6-bf33-4cecc7d0b897
+  token state:   uninitialized
+Using slot 0 with a present token (0x0)
+Secret Key Object; AES length 32
+  label:      -aes-key
+  ID:         cafebabe
+  Usage:      encrypt, decrypt
+  Access:     none
+----
+
+Make the `Cryptoki API` available to Linux user-space applications:
+
+* Uses the `ckteec` library, which is licensed under the 2-clause BSD license
+and available in `optee_client.git`.
+* Translates `Cryptoki API` calls into messages that invoke TA commands and
+arguments in a GPD TEE.
+
+The `PKCS#11` token is implemented as an `OP-TEE` Trusted Application (TA):
+
+* Uses `GPD TEE APIs` for secure storage and cryptography.
+* Fully implements the PKCS#11 specification.
+* Licensed under the 2-clause BSD license and available in optee_os.git.
+
+
+* After Initialization slot will look like this.
+
+----
+root@ShopCamera:~# pkcs11-tool --module /usr/lib/libckteec.so.0  -L
+Available slots:
+Slot 0 (0x0): OP-TEE PKCS11 TA - TEE UUID 55630e1a-0f9a-58e6-bf33-4cecc7d0b897
+  token label        : optee
+  token manufacturer : Linaro
+  token model        : OP-TEE TA
+  token flags        : login required, rng, SO PIN count low, token initialized, PIN initialized
+  hardware version   : 0.0
+  firmware version   : 0.1
+  serial num         : 0000000000000000
+  pin min/max        : 4/128
+Slot 1 (0x1): OP-TEE PKCS11 TA - TEE UUID 55630e1a-0f9a-58e6-bf33-4cecc7d0b897
+  token state:   uninitialized
+Slot 2 (0x2): OP-TEE PKCS11 TA - TEE UUID 55630e1a-0f9a-58e6-bf33-4cecc7d0b897
+  token state:   uninitialized
+----
+
 == Refrences
 * https://datatracker.ietf.org/doc/html/rfc2898
 * https://cryptography.io/en/latest/hazmat/primitives/asymmetric/rsa/
 * https://www.digitalocean.com/community/tutorials/openssl-essentials-working-with-ssl-certificates-private-keys-and-csrs
 * https://www.cem.me/20150104-cert-binaries-2.html
+* https://static.linaro.org/connect/lvc21/presentations/lvc21-215.pdf
