@@ -1,3 +1,5 @@
+:imagesdir: ../images
+
 = Crypto Lab
 Abhishek Ojha <Abhishekojha38@gmail.com.com>
 :toc:
@@ -25,186 +27,6 @@ Example setup:
 ----
 sudo apt install openssl asciidoctor
 ----
-
-== Encoding Formats
-
-* `PEM`: ASCII Base64 encoding format. PEM certificates can have a file extension
-of .pem, .crt, or .cer.The PEM format is the most common format that Certificate
-Authorities issue certificates in. PEM certificates usually have extentions such
-as .pem, .crt, .cer, and .key. They are Base64 encoded ASCII files and contain
-"-----BEGIN CERTIFICATE-----" and "-----END CERTIFICATE-----" statements. Server
-certificates, intermediate certificates, and private keys can all be put into
-the PEM format. The PKCS12 format is preferred for exchanging certificates that
-has private key(s).
-
-----
------BEGIN CERTIFICATE-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...
------END CERTIFICATE-----
-----
-
-* `DER`: The DER format is simply a binary form of a certificate instead of the
-ASCII PEM format. It sometimes has a file extension of .der but it often has a
-file extension of .cer so the only way to tell the difference between a DER .cer
-file and a PEM .cer file is to open it in a text editor and look for the
-BEGIN/END statements. All types of certificates and private keys can be encoded
-in DER format.
-
-* `PKCS#5`: Password-Based Encryption Standard. Protecting private keys with
-passwords. Replaced by `PKCS#12` (which is more general) and `PKCS#8` for key
-storage. http://tools.ietf.org/html/rfc2898[RFC2898]
-
-* `PKCS#8`: Standard syntax for storing private keys. It Can be encrypted or
-unencrypted. 
-
-----
-Unencrypted:
------BEGIN PRIVATE KEY-----
-...
------END PRIVATE KEY-----
-
-Encrypted:
------BEGIN ENCRYPTED PRIVATE KEY-----
-...
------END ENCRYPTED PRIVATE KEY-----
-----
-
-[NOTE]
---
-PKCS#8 is a private key syntax for all algorithms and not just RSA. On the
-other hand, PKCS#1 is primarily for using the RSA algorithm.
---
-
-* `PKCS#10`: Certificate Signing Request (CSR) format. Refer to the
-<<generate-csr,generate csr>> section.
-
-----
------BEGIN CERTIFICATE REQUEST-----
-...
------END CERTIFICATE REQUEST-----
-----
-
-* `PKCS#11`: defines a platform-independent API known as `Cryptoki`
-(“Cryptographic Token Interface”).It allows applications to interact with
-cryptographic tokens — such as Hardware Security Modules (HSMs), smart cards,
-or TPMs, OP-TEE. 
-
-** List available slots.
-
-[source,bash]
-----
-pkcs11-tool --module /usr/lib/libckteec.so -L
-----
-
-----
-Available slots:
-Slot 0 (0x0): OP-TEE PKCS#11 Token (User)
-  token label        : OP-TEE Token
-  token manufacturer : Linaro
-  token model        : OP-TEE
-  serial num         : 0000000000000000
-  flags              : login required, rng, token initialized
-
-----
-
-** Initialize token (first time only) and pin.
-
-[source,bash]
-----
-pkcs11-tool --module /usr/lib/libckteec.so --init-token --label "TEE-Token"
-pkcs11-tool --module /usr/lib/libckteec.so --init-pin --pin 1234
-----
-
-** Generate RSA key pair inside secure enclave.
-
-[source,bash]
-----
-pkcs11-tool --module /usr/lib/libckteec.so \
-  --login --pin 1234 \
-  --keypairgen --key-type RSA:2048 --id 01 --label "TEE-RSA-Key"
----- 
-
-** After generating the key list the URI.
-
-[source,bash]
-----
-pkcs11-tool --module /usr/lib/libckteec.so --list-objects --login --pin 1234 \
---type privkey --output-format pkcs11
-----
-----
-pkcs11:token=TEE-Token;object=TEE-RSA-Key;id=%01;type=private
-----
-
-** Now you can use it directly with openssl.
-
-[source,bash]
-----
-openssl pkeyutl -sign \
-  -engine pkcs11 \
-  -keyform engine \
-  -inkey 'pkcs11:token=TEE-Token;id=%01;type=private' \
-  -in data.txt -out sig.bin
-----
-
-* `PKCS#12`: Container format for storing private key + certificate chain. It is
-used to bundle a private key with its X.509 or to bundle all the members of a
-chain of trust.
-
-[source,bash]
-----
-openssl pkcs12 -export -out bundle.p12 -inkey private.key -in cert.crt -certfile ca.crt
-----
-
-* `PKCS#7`: Format for signed or encrypted data (e.g., certificate chain or CMS).
-Used for bundling multiple certificates (like intermediate + root).
-
-[cols="1,2,2,2,1", options="header"]
-|===
-| Format / Standard | Purpose | Contains | Common Extension | Encoding
-
-| PEM
-| General container
-| Certs / Keys
-| .pem, .crt, .key
-| Base64
-
-| DER
-| Binary form
-| Certs / Keys
-| .der, .cer
-| Binary
-
-| PKCS#5
-| Password-based key derivation
-| —
-| —
-| —
-
-| PKCS#8
-| Private key format
-| Private key
-| .p8, .key
-| PEM/DER
-
-| PKCS#10
-| Certificate Signing Request
-| CSR info + signature
-| .csr
-| PEM/DER
-
-| PKCS#12
-| Key + certificate chain container
-| Private key + certs
-| .p12, .pfx
-| Binary
-
-| PKCS#7 (CMS)
-| Signed/encrypted message or cert chain. *Uses private key for signing but does not contain it.*
-| Certs, signatures, encrypted data
-| .p7b, .p7c
-| Binary/PEM
-|===
-
 
 == Key Generation
 
@@ -243,6 +65,29 @@ rQIDAQAB
 ----
 
 == Understanding digital signature
+
+* Steps for Computing a Digital Signature:
+- `Generate a Key Pair`: Create a public and private key pair using a key generation
+algorithm, such as RSA.
+- `Prepare the Data`: Identify the data for which the signature will be computed.
+- `Compute the Hash`: Generate a hash of the data using a hashing algorithm, for
+example, SHA-256.
+- `Encrypt the Hash`: Encrypt the computed hash with the private key. The result
+of this encryption is the digital signature.
+
+* Steps for Verifying a Digital Signature
+- `Gather Required Information`: To verify a signature,  data that was signed,
+the digital signature, the hash algorithm used, and the signer’s public key.
+- `Compute the Data Hash`: Generate the hash of the received data using the same
+hashing algorithm that was used to create the signature (e.g., SHA-256).
+- `Decrypt the Signature`: Use the public key to decrypt the digital signature.
+This will yield the hash value that was originally computed during signing.
+- `Compare Hashes`: Compare the hash obtained from the data with the hash obtained
+from decrypting the signature.
+- If the hashes match, the signature is valid and the data has not been tampered
+with.
+- If the hashes do not match, the data may have been altered, and the signature is
+invalid.
 
 A digital signature is a cryptographic method that ensures:
 
@@ -606,7 +451,85 @@ $ openssl verify -CAfile rootCA.crt device.crt
 device.crt: OK
 ----
 
-== Understanding PKCS#11
+== Encoding Formats
+
+=== PEM
+
+* ASCII Base64 encoding format.
+* PEM certificates can have a file extension of .pem, .crt, or .cer.
+* The PEM format is the most common format that Certificate Authorities issue
+certificates in.
+* PEM certificates usually have extentions such as .pem, .crt, .cer, and .key.
+* They are Base64 encoded ASCII files and contain "-----BEGIN CERTIFICATE-----"
+and "-----END CERTIFICATE-----" statements.
+* Server certificates, intermediate certificates, and private keys can all be
+put into the PEM format.
+* The PKCS12 format is preferred for exchanging certificates that has private
+key(s).
+
+----
+-----BEGIN CERTIFICATE-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...
+-----END CERTIFICATE-----
+----
+
+=== DER
+
+* The DER format is simply a binary form of a certificate instead of the
+ASCII PEM format.
+* It sometimes has a file extension of .der but it often has a file extension
+of .cer so the only way to tell the difference between a DER .cer file and a
+PEM .cer file is to open it in a text editor and look for the BEGIN/END
+statements.
+* All types of certificates and private keys can be encoded in DER format.
+
+=== PKCS#5
+
+* Password-Based Encryption Standard.
+* Protecting private keys with passwords.
+* Replaced by `PKCS#12` (which is more general) and `PKCS#8` for key storage.
+http://tools.ietf.org/html/rfc2898[RFC2898]
+
+=== PKCS#8
+
+* Standard syntax for storing private keys.
+* It Can be encrypted or unencrypted. 
+
+----
+Unencrypted:
+-----BEGIN PRIVATE KEY-----
+...
+-----END PRIVATE KEY-----
+
+Encrypted:
+-----BEGIN ENCRYPTED PRIVATE KEY-----
+...
+-----END ENCRYPTED PRIVATE KEY-----
+----
+
+[NOTE]
+--
+PKCS#8 is a private key syntax for all algorithms and not just RSA. On the
+other hand, PKCS#1 is primarily for using the RSA algorithm.
+--
+
+=== PKCS#10
+
+* Certificate Signing Request (CSR) format. Refer to the
+<<generate-csr,generate csr>> section.
+
+----
+-----BEGIN CERTIFICATE REQUEST-----
+...
+-----END CERTIFICATE REQUEST-----
+----
+
+=== PKCS#11
+
+* Defines a platform-independent API known as `Cryptoki`
+(“Cryptographic Token Interface”).
+* It allows applications to interact with cryptographic tokens — such as
+Hardware Security Modules (HSMs), smart cards,or TPMs, OP-TEE.
 
 PKCS#11 Module is a Module that has an API for accessing Crypto Hardware such
 as HSM (Hardware Security Module), Smart Card, and Crypto Tokens
@@ -639,6 +562,67 @@ There are different types of objects:
 * Data objects → arbitrary user data
 * Key objects → private, public, or secret keys
 * Certificate objects → X.509 certs
+
+==== PKCS#11 with OP-TEE
+
+* List available slots.
+
+[source,bash]
+----
+pkcs11-tool --module /usr/lib/libckteec.so -L
+----
+
+----
+Available slots:
+Slot 0 (0x0): OP-TEE PKCS#11 Token (User)
+  token label        : OP-TEE Token
+  token manufacturer : Linaro
+  token model        : OP-TEE
+  serial num         : 0000000000000000
+  flags              : login required, rng, token initialized
+
+----
+
+* Initialize token (first time only) and pin.
+
+[source,bash]
+----
+pkcs11-tool --module /usr/lib/libckteec.so --init-token --label "TEE-Token"
+pkcs11-tool --module /usr/lib/libckteec.so --init-pin --pin 1234
+----
+
+* Generate RSA key pair inside secure enclave.
+
+[source,bash]
+----
+pkcs11-tool --module /usr/lib/libckteec.so \
+  --login --pin 1234 \
+  --keypairgen --key-type RSA:2048 --id 01 --label "TEE-RSA-Key"
+---- 
+
+* After generating the key list the URI.
+
+[source,bash]
+----
+pkcs11-tool --module /usr/lib/libckteec.so --list-objects --login --pin 1234 \
+--type privkey --output-format pkcs11
+----
+----
+pkcs11:token=TEE-Token;object=TEE-RSA-Key;id=%01;type=private
+----
+
+* Now you can use it directly with openssl.
+
+[source,bash]
+----
+openssl pkeyutl -sign \
+  -engine pkcs11 \
+  -keyform engine \
+  -inkey 'pkcs11:token=TEE-Token;id=%01;type=private' \
+  -in data.txt -out sig.bin
+----
+
+* List the objects.
 
 [source,bash]
 ----
@@ -682,28 +666,171 @@ The `PKCS#11` token is implemented as an `OP-TEE` Trusted Application (TA):
 * Licensed under the 2-clause BSD license and available in optee_os.git.
 
 
-* After Initialization slot will look like this.
+=== PKCS#12
+
+* Container format for storing private key + certificate chain.
+* It is used to bundle a private key with its X.509 or to bundle all the members
+of a chain of trust.
 
 [source,bash]
 ----
-pkcs11-tool --module /usr/lib/libckteec.so.0  -L
+openssl pkcs12 -export -out bundle.p12 -inkey private.key -in cert.crt \
+-certfile ca.crt
+----
+
+=== PKCS#7
+* PKCS#7 defines a general syntax for cryptographic messages such as signed
+data, encrypted data, digested data, or authenticated data.
+
+It’s used in:
+- S/MIME (secure email)
+- Certificate bundles
+- Code signing
+- Firmware update packages
+
+==== Sign message PKCS#7
+
+It is necessary to know how digital signatures are produced and verified, before
+moving on to PKCS#7 SignedData.
+
+* Generate a private key and certificate.
+
+[source,bash]
+----
+openssl genrsa -out private.key 2048
+openssl req -x509 -new -key private.key -out cert.pem -days 365 \
+  -subj "/C=US/ST=CA/L=SanJose/O=Osmosis Solutions/CN=example.com"
+----
+
+* Create a message file
+
+[source,bash]
+----
+echo "Hello, this is a PKCS#7 signing example." > message.txt
+----
+
+* Sign the message using PKCS#7 (CMS)
+
+[source,bash]
+----
+openssl smime -sign \
+  -in message.txt \
+  -signer cert.pem \
+  -inkey private.key \
+  -out signed.p7s \
+  -outform PEM
+----
+
+[NOTE]
+--
+If you want only the signature (detached), use -nodetach
+--
+
+[source,bash]
+----
+openssl smime -sign -in message.txt -signer cert.pem -inkey private.key \
+  -out signed.p7s -outform PEM -nodetach
+----
+
+* View the signed message structure
+
+[source,bash]
+----
+openssl pkcs7 -in signed.p7s -print_certs -text -noout
 ----
 ----
-Available slots:
-Slot 0 (0x0): OP-TEE PKCS11 TA - TEE UUID 55630e1a-0f9a-58e6-bf33-4cecc7d0b897
-  token label        : optee
-  token manufacturer : Linaro
-  token model        : OP-TEE TA
-  token flags        : login required, rng, SO PIN count low, token initialized, PIN initialized
-  hardware version   : 0.0
-  firmware version   : 0.1
-  serial num         : 0000000000000000
-  pin min/max        : 4/128
-Slot 1 (0x1): OP-TEE PKCS11 TA - TEE UUID 55630e1a-0f9a-58e6-bf33-4cecc7d0b897
-  token state:   uninitialized
-Slot 2 (0x2): OP-TEE PKCS11 TA - TEE UUID 55630e1a-0f9a-58e6-bf33-4cecc7d0b897
-  token state:   uninitialized
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number:
+            78:3c:3a:b0:3a:59:89:eb:3a:a8:17:2b:88:19:79:c2:86:06:f7:04
+        Signature Algorithm: sha256WithRSAEncryption
+        Issuer: C=US, ST=CA, L=SanJose, O=Osmosis Solutions, CN=example.com
+        Validity
+            Not Before: Oct 22 03:09:00 2025 GMT
+            Not After : Oct 22 03:09:00 2026 GMT
+        Subject: C=US, ST=CA, L=SanJose, O=Osmosis Solutions, CN=example.com
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+                Public-Key: (2048 bit)
+                Modulus:
+                    00:d1:6b:93:66:7c:0b:12:d0:48:22:2b:fa:0b:50:
+                    ......
+                    91:89
+                Exponent: 65537 (0x10001)
+        X509v3 extensions:
+            X509v3 Subject Key Identifier: 
+                72:53:8E:21:60:0E:58:F9:D1:0C:5D:78:4D:C6:92:92:49:20:E5:4D
+            X509v3 Authority Key Identifier: 
+                72:53:8E:21:60:0E:58:F9:D1:0C:5D:78:4D:C6:92:92:49:20:E5:4D
+            X509v3 Basic Constraints: critical
+                CA:TRUE
+    Signature Algorithm: sha256WithRSAEncryption
+    Signature Value:
+        0b:11:0e:bc:c8:c7:2a:8a:fb:ad:1b:62:a9:b0:1d:65:8d:d0:
+        ....
+        92:0e:b0:10
+
 ----
+
+* Verify the signature
+
+[source,bash]
+----
+openssl smime -verify \
+  -in signed.p7s \
+  -inform PEM \
+  -content message.txt \
+  -noverify \
+  -out verified.txt
+----
+
+[cols="1,2,2,2,1", options="header"]
+|===
+| Format / Standard | Purpose | Contains | Common Extension | Encoding
+
+| PEM
+| General container
+| Certs / Keys
+| .pem, .crt, .key
+| Base64
+
+| DER
+| Binary form
+| Certs / Keys
+| .der, .cer
+| Binary
+
+| PKCS#5
+| Password-based key derivation
+| —
+| —
+| —
+
+| PKCS#8
+| Private key format
+| Private key
+| .p8, .key
+| PEM/DER
+
+| PKCS#10
+| Certificate Signing Request
+| CSR info + signature
+| .csr
+| PEM/DER
+
+| PKCS#12
+| Key + certificate chain container
+| Private key + certs
+| .p12, .pfx
+| Binary
+
+| PKCS#7 (CMS)
+| Signed/encrypted message or cert chain. *Uses private key for signing but does not contain it.*
+| Certs, signatures, encrypted data
+| .p7b, .p7c
+| Binary/PEM
+|===
 
 == Refrences
 * https://datatracker.ietf.org/doc/html/rfc2898
