@@ -75,6 +75,8 @@ example, SHA-256.
 - `Encrypt the Hash`: Encrypt the computed hash with the private key. The result
 of this encryption is the digital signature.
 
+image::digital_signature_generation.png[Digital Signature Flow, align=center, width=500]
+
 * Steps for Verifying a Digital Signature
 - `Gather Required Information`: To verify a signature,  data that was signed,
 the digital signature, the hash algorithm used, and the signer’s public key.
@@ -88,6 +90,8 @@ from decrypting the signature.
 with.
 - If the hashes do not match, the data may have been altered, and the signature is
 invalid.
+
+image::digital_signature_verification.png[Digital Signature Flow, align=center, width=600]
 
 A digital signature is a cryptographic method that ensures:
 
@@ -133,13 +137,205 @@ openssl dgst -sha256 -sign private_key.pem -out signature.bin data.txt
 openssl dgst -sha256 -verify public_key.pem -signature signature.bin data.txt
 ----
 
-== 5. Understanding X509 Certificate
+=== Ways to store a digital signature:
+
+* Raw Binary Format:
+
+[source,bash]
+----
+openssl dgst -sha256 -sign private_key.pem -out signature.bin data.txt
+----
+
+* PEM Format:
+
+[source,bash]
+----
+openssl dgst -sha256 -sign private_key.pem -out signature.bin data.txt
+openssl base64 -in signature.bin -out signature.pem
+----
+
+----
+-----BEGIN SIGNATURE-----
+MEYCIQC1...
+-----END SIGNATURE-----
+----
+
+* PKCS#7 / CMS (Cryptographic Message Syntax)
+
+----
+SignedData {
+  version,
+  digestAlgorithms,
+  encapContentInfo,
+  certificates,        <-- X.509 cert(s)
+  crls OPTIONAL,
+  signerInfos          <-- Signature + metadata
+}
+----
+
+[source,bash]
+----
+openssl smime -sign -in data.txt -signer cert.pem -inkey key.pem -outform DER \
+-out signature.p7s
+----
+
+* PKCS#10 / X.509 Containers
+
+[source,bash]
+----
+openssl req -newkey rsa:2048 -keyout private_key.pem -x509 -days 365 -out cert.pem
+----
+
+== Chain of trust
+
+Each certificate’s signature can be verified using the public key of the issuer
+above it.
+
+* The server certificate is verified by the intermediate’s public key.
+* The intermediate certificate is verified by the root CA’s public key.
+* The root CA is trusted because your OS or browser already trusts it.
+
+----
+Root CA → Intermediate CA(s) → End-Entity (Server) Certificate
+----
+
+----
++------------------------+
+| Root CA Certificate    |
+| (self-signed, trusted) |
++-----------▲------------+
+            |
+            | signs
+            ▼
++-----------------------------+
+| Intermediate CA Certificate |
+| (signed by Root CA)         |
++-----------▲-----------------+
+            |
+            | signs
+            ▼
++--------------------------------+
+| End-Entity / Server Certificate|
+| (www.example.com)              |
++--------------------------------+
+----
+
+When the server sends its cert chain to the client, it includes the bottom two:
+----
+[Server Cert] + [Intermediate Cert(s)]
+----
+
+[NOTE]
+--
+The intermediate certificate (Intermediate CA) exists for security, flexibility,
+and scalability
+--
+
+* `Root CAs` Are Extremely Sensitive. So we don't want to expose the private key
+and that the reason `Intermediate cert` came in picture.
+
+* `Intermediate Certificates` Act as a “Buffer”.Root CA delegates the signing
+authority to one or more Intermediate CAs.These intermediates then sign
+end-entity (server) certificates.
+
+** Limits exposure of root private key
+** Easier key rotation
+
+=== Example
+
+* Create following certs to undertand the chain of trust.
+
+----
+certs/
+  root/
+    root.key.pem
+    root.crt.pem
+  intermediate/
+    intermediate.key.pem
+    intermediate.crt.pem
+  server/
+    server.key.pem
+    server.csr.pem
+    server.crt.pem
+----
+
+* Generate Root CA - self signed
+
+[source,bash]
+----
+# 2.1 Generate root private key
+openssl genrsa -out certs/root/root.key.pem 4096
+
+# 2.2 Generate self-signed root certificate (valid 10 years)
+openssl req -x509 -new -nodes -key certs/root/root.key.pem \
+  -sha256 -days 3650 \
+  -out certs/root/root.crt.pem \
+  -subj "/C=US/ST=CA/L=SanFrancisco/O=ExampleRootCA/OU=RootCA/CN=ExampleRootCA"
+
+----
+
+* Generate the Intermediate CA
+
+[source,bash]
+----
+# 3.1 Generate intermediate private key
+openssl genrsa -out certs/intermediate/intermediate.key.pem 4096
+
+# 3.2 Generate CSR (Certificate Signing Request) for intermediate
+openssl req -new -key certs/intermediate/intermediate.key.pem \
+  -out certs/intermediate/intermediate.csr.pem \
+  -subj "/C=US/ST=CA/L=SanFrancisco/O=ExampleIntermediateCA/OU=Intermediate/CN=ExampleIntermediateCA"
+
+# 3.3 Sign the intermediate CSR with Root CA
+openssl x509 -req -in certs/intermediate/intermediate.csr.pem \
+  -CA certs/root/root.crt.pem -CAkey certs/root/root.key.pem -CAcreateserial \
+  -out certs/intermediate/intermediate.crt.pem -days 1825 -sha256
+
+----
+Now you have an Intermediate CA signed by the Root CA.
+
+* Generate the Server (End-Entity) Certificate
+
+[source,bash]
+----
+# 4.1 Generate server private key
+openssl genrsa -out certs/server/server.key.pem 2048
+
+# 4.2 Generate server CSR
+openssl req -new -key certs/server/server.key.pem \
+  -out certs/server/server.csr.pem \
+  -subj "/C=US/ST=CA/L=SanFrancisco/O=ExampleServer/OU=Web/CN=www.example.com"
+
+# 4.3 Sign server CSR with Intermediate CA
+openssl x509 -req -in certs/server/server.csr.pem \
+  -CA certs/intermediate/intermediate.crt.pem -CAkey certs/intermediate/intermediate.key.pem -CAcreateserial \
+  -out certs/server/server.crt.pem -days 825 -sha256
+----
+
+* Verify the Chain
+
+[source,bash]
+----
+# Verify the server cert against the chain
+openssl verify -CAfile <(cat certs/root/root.crt.pem certs/intermediate/intermediate.crt.pem) \
+  certs/server/server.crt.pem
+----
+
+* Optional: Create PKCS#7 Bundle
+----
+openssl crl2pkcs7 -nocrl -certfile certs/server/server.crt.pem \
+  -certfile certs/intermediate/intermediate.crt.pem -out certs/server/server.p7b \
+  -certfile certs/root/root.crt.pem
+----
+
+== Understanding X509 Certificate
 
 An X.509 certificate is a digital document that binds a public key to an
 identity (like a user, computer, or server) and is used to verify authenticity
 and enable secure communication. These certificates are a standard part of
 Public Key Infrastructure (PKI), are issued by trusted Certificate Authorities
 (CAs).
+
 
 There are two common types:
 
@@ -331,6 +527,8 @@ Certificate:
 
 Now we’ll create another certificate (for a device, web server, or user) that’s
 signed by the Root CA.
+
+image::swupdate_cms_1.png[Digital Certificate Flow, align=center, width=800]
 
 * Generate Device Private Key.
 

@@ -3,6 +3,8 @@
 This repository documents step-by-step procedures for:
 - Generating cryptographic keys (RSA)
 - Creating and signing X.509 certificates
+- Encoding formats
+- Chain of trust (RootCA Cert, Intermediate Cert, Server Cert)
 
 📄 Main guide: [`docs/crypto_guide.adoc`](docs/crypto_guide.adoc)
 
